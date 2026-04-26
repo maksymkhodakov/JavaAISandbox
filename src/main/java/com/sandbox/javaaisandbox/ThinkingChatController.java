@@ -30,18 +30,19 @@ public class ThinkingChatController {
 
     /**
      * SSE endpoint — emits three event types:
-     *   event: thinking   →  partial thinking chunk
-     *   event: text       →  partial answer chunk
-     *   event: done       →  stream complete signal
-     *   event: error      →  stream error signal
+     *   event: thinking → partial thinking chunk
+     *   event: text → partial answer chunk
+     *   event: done → stream complete signal
+     *   event: error → stream error signal
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> stream(@RequestParam String message,
                                                 @RequestParam(defaultValue = "8000") int budgetTokens) {
         AnthropicChatOptions options = AnthropicChatOptions.builder()
-                .model("claude-sonnet-4-5-20250929")
+                .model(chatModel.getOptions().getModel())
+                .thinkingAdaptive()
                 .thinkingEnabled(budgetTokens)
-                .maxTokens(budgetTokens + 4000) // must exceed budgetTokens
+                .maxTokens(chatModel.getOptions().getMaxTokens())
                 .build();
 
         Prompt prompt = new Prompt(List.of(new UserMessage(message)), options);
