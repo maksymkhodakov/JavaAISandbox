@@ -1,9 +1,7 @@
 package com.sandbox.javaaisandbox;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
-import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -11,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -21,12 +20,12 @@ import java.util.Map;
 public class ThinkingChatController {
 
     private final AnthropicChatModel chatModel;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
 
     public ThinkingChatController(AnthropicChatModel chatModel,
-                                  ObjectMapper objectMapper) {
+                                  JsonMapper jsonMapper) {
         this.chatModel = chatModel;
-        this.objectMapper = objectMapper;
+        this.jsonMapper = jsonMapper;
     }
 
     /**
@@ -41,8 +40,7 @@ public class ThinkingChatController {
                                                 @RequestParam(defaultValue = "8000") int budgetTokens) {
         AnthropicChatOptions options = AnthropicChatOptions.builder()
                 .model("claude-sonnet-4-5-20250929")
-                .thinking(AnthropicApi.ThinkingMode.ENABLED)
-                .budgetTokens(budgetTokens)
+                .thinkingEnabled(budgetTokens)
                 .maxTokens(budgetTokens + 4000) // must exceed budgetTokens
                 .build();
 
@@ -58,19 +56,24 @@ public class ThinkingChatController {
 
     private ServerSentEvent<String> toSseEvent(ChatResponse response) {
         try {
-            var output   = response.getResult().getOutput();
+            var result = response.getResult();
+            if (result == null) {
+                return ServerSentEvent.<String>builder().comment("ping").build();
+            }
+            var output   = result.getOutput();
             var metadata = output.getMetadata();
 
-            // Spring AI Anthropic places the thinking delta under "thinking" key.
-            // For text deltas the content() string is non-empty.
-            String thinkingChunk = (String) metadata.getOrDefault("thinking", "");
-            String textChunk     = output.getText() != null ? output.getText() : "";
+            /*
+                In Spring AI 2.x the thinking delta arrives with metadata "thinking"=Boolean.TRUE
+                the actual thinking text is in output.getText().
+             */
+            boolean isThinking = Boolean.TRUE.equals(metadata.get("thinking"));
+            String textChunk = output.getText();
 
-            // Thinking block takes priority in this chunk
-            if (!thinkingChunk.isBlank()) {
-                return sseEvent("thinking", Map.of("chunk", thinkingChunk));
+            if (isThinking && textChunk != null && !textChunk.isBlank()) {
+                return sseEvent("thinking", Map.of("chunk", textChunk));
             }
-            if (!textChunk.isBlank()) {
+            if (!isThinking && textChunk != null && !textChunk.isBlank()) {
                 return sseEvent("text", Map.of("chunk", textChunk));
             }
 
@@ -88,7 +91,7 @@ public class ThinkingChatController {
         try {
             return ServerSentEvent.<String>builder()
                     .event(eventType)
-                    .data(objectMapper.writeValueAsString(payload))
+                    .data(jsonMapper.writeValueAsString(payload))
                     .build();
         } catch (Exception e) {
             return errorEvent(e.getMessage());
@@ -106,7 +109,7 @@ public class ThinkingChatController {
         try {
             return ServerSentEvent.<String>builder()
                     .event("error")
-                    .data(objectMapper.writeValueAsString(Map.of("message", message)))
+                    .data(jsonMapper.writeValueAsString(Map.of("message", message)))
                     .build();
         } catch (Exception ex) {
             return ServerSentEvent.<String>builder()
