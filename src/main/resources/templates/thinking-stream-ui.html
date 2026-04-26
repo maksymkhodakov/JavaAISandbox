@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Claude Thinking Stream</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #161b27;
+    --surface2: #1e2536;
+    --border: rgba(255,255,255,.08);
+    --border2: rgba(255,255,255,.14);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,.12);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,.1);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,.1);
+    --radius: 10px;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; }
+
+  h1 {
+    font-size: 15px; font-weight: 500; letter-spacing: .04em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;
+  }
+  h1::before {
+    content: ''; display: inline-block;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--purple);
+    box-shadow: 0 0 8px var(--purple);
+  }
+
+  /* ── Input area ── */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: .75rem;
+  }
+
+  .url-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: .75rem;
+    font-size: 12px; color: var(--muted);
+  }
+  .url-row label { white-space: nowrap; }
+  .url-row input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--text);
+    outline: none;
+  }
+  .url-row input:focus { border-color: var(--border2); }
+
+  .prompt-row { display: flex; gap: 10px; }
+
+  textarea {
+    flex: 1; min-height: 60px; max-height: 140px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+    font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    color: var(--text); resize: vertical; outline: none;
+    transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--border2); }
+
+  .right-col { display: flex; flex-direction: column; gap: 8px; }
+
+  button.send {
+    background: var(--purple-dim);
+    border: 1px solid rgba(167,139,250,.3);
+    color: var(--purple); border-radius: 8px;
+    padding: 0 20px; height: 44px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    white-space: nowrap; transition: all .15s;
+  }
+  button.send:hover { background: rgba(167,139,250,.2); }
+  button.send:disabled { opacity: .4; cursor: not-allowed; }
+
+  .budget-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .budget-row input[type=range] {
+    flex: 1; accent-color: var(--purple); height: 3px;
+  }
+  .budget-val { min-width: 28px; text-align: right; font-family: var(--mono); }
+
+  /* ── Stream blocks ── */
+  .stream-area { display: flex; flex-direction: column; gap: 10px; }
+
+  .empty {
+    text-align: center; padding: 4rem 1rem;
+    color: var(--muted); font-size: 13px;
+  }
+  .empty-icon {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: center;
+    margin: 0 auto 1rem; font-size: 18px; opacity: .4;
+  }
+
+  .block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .block.thinking-active  { border-color: rgba(167,139,250,.35); }
+  .block.answer-active    { border-color: rgba(52,211,153,.3); }
+
+  .block-header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 14px; cursor: pointer;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    transition: background .15s; user-select: none;
+  }
+  .block-header:hover { background: rgba(255,255,255,.04); }
+
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    flex-shrink: 0; transition: all .3s;
+  }
+  .dot.idle       { background: var(--muted); }
+  .dot.pulse-purple { background: var(--purple); animation: glow-purple 1.1s ease-in-out infinite; }
+  .dot.done-purple  { background: var(--purple); opacity: .5; }
+  .dot.pulse-green  { background: var(--green); animation: glow-green 1.1s ease-in-out infinite; }
+  .dot.done-green   { background: var(--green); opacity: .5; }
+
+  @keyframes glow-purple { 0%,100%{box-shadow:0 0 0 0 rgba(167,139,250,.7)} 50%{box-shadow:0 0 0 4px rgba(167,139,250,0)} }
+  @keyframes glow-green  { 0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.7)} 50%{box-shadow:0 0 0 4px rgba(52,211,153,0)} }
+
+  .block-label {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase;
+  }
+  .label-thinking { color: var(--purple); }
+  .label-answer   { color: var(--green); }
+
+  .block-meta {
+    font-size: 11px; color: var(--muted);
+    font-family: var(--mono); margin-left: 4px;
+  }
+
+  .chevron {
+    margin-left: auto; font-size: 10px; color: var(--muted);
+    transition: transform .2s;
+  }
+  .chevron.open { transform: rotate(90deg); }
+
+  .block-body {
+    padding: 14px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.75;
+    color: #94a3b8;
+    max-height: 300px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-word;
+    background: var(--bg);
+  }
+  .block-body.answer-body {
+    font-family: var(--sans); font-size: 14px;
+    color: var(--text); max-height: none;
+    line-height: 1.8;
+  }
+
+  .block.collapsed .block-body { display: none; }
+  .block.collapsed .block-header { border-bottom: none; }
+
+  /* blinking cursor */
+  .cursor {
+    display: inline-block; width: 2px; height: .9em;
+    background: currentColor; vertical-align: text-bottom;
+    animation: blink .75s step-end infinite; margin-left: 1px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .error-block {
+    background: var(--red-dim); border: 1px solid rgba(248,113,113,.25);
+    border-radius: var(--radius); padding: 12px 16px;
+    font-size: 13px; color: var(--red);
+  }
+
+  /* scrollbar */
+  .block-body::-webkit-scrollbar { width: 4px; }
+  .block-body::-webkit-scrollbar-track { background: transparent; }
+  .block-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Claude Thinking Stream</h1>
+
+  <div class="input-card">
+    <div class="url-row">
+      <label>Spring Boot URL</label>
+      <input id="baseUrl" value="http://localhost:8080/api/chat/stream"/>
+    </div>
+    <div class="prompt-row">
+      <textarea id="prompt" rows="2"
+        placeholder="Ask something that benefits from deep reasoning…"
+      >Explain the trade-offs between CP and AP systems in the CAP theorem, with real-world examples.</textarea>
+      <div class="right-col">
+        <button class="send" id="sendBtn" onclick="startStream()">Ask ↗</button>
+        <div class="budget-row">
+          <span>Budget</span>
+          <input type="range" id="budget" min="1024" max="20000" step="512" value="8000"
+                 oninput="document.getElementById('budgetVal').textContent=
+                   Math.round(this.value/1000*10)/10+'k'">
+          <span class="budget-val" id="budgetVal">8k</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stream-area" id="streamArea">
+    <div class="empty">
+      <div class="empty-icon">◎</div>
+      Ask a question to see the thinking + answer stream in real-time
+    </div>
+  </div>
+</div>
+
+<script>
+let es = null;
+let thinkingText = '';
+let answerText   = '';
+let thinkingDone = false;
+
+function startStream() {
+  if (es) { es.close(); es = null; }
+  thinkingText = ''; answerText = ''; thinkingDone = false;
+
+  const q      = document.getElementById('prompt').value.trim();
+  if (!q) return;
+  const budget = document.getElementById('budget').value;
+  const base   = document.getElementById('baseUrl').value.trim();
+  const btn    = document.getElementById('sendBtn');
+
+  btn.disabled = true; btn.textContent = 'Streaming…';
+
+  document.getElementById('streamArea').innerHTML = `
+    <div class="block thinking-active" id="thinkingBlock">
+      <div class="block-header" onclick="toggleBlock('thinkingBlock','thinkingChevron')">
+        <div class="dot pulse-purple" id="thinkingDot"></div>
+        <span class="block-label label-thinking">Thinking</span>
+        <span class="block-meta" id="thinkingMeta"></span>
+        <span class="chevron open" id="thinkingChevron">▶</span>
+      </div>
+      <div class="block-body" id="thinkingBody"><span class="cursor"></span></div>
+    </div>
+    <div class="block collapsed" id="answerBlock">
+      <div class="block-header" onclick="toggleBlock('answerBlock','answerChevron')">
+        <div class="dot idle" id="answerDot"></div>
+        <span class="block-label label-answer">Answer</span>
+        <span class="block-meta" id="answerMeta"></span>
+        <span class="chevron" id="answerChevron">▶</span>
+      </div>
+      <div class="block-body answer-body" id="answerBody"></div>
+    </div>`;
+
+  const url = `${base}?message=${encodeURIComponent(q)}&budgetTokens=${budget}`;
+  es = new EventSource(url);
+
+  es.addEventListener('thinking', e => {
+    const { chunk } = JSON.parse(e.data);
+    thinkingText += chunk;
+    const body = document.getElementById('thinkingBody');
+    body.textContent = thinkingText;
+    body.appendChild(makeCursor());
+    body.scrollTop = body.scrollHeight;
+    document.getElementById('thinkingMeta').textContent =
+      '~' + Math.round(thinkingText.length / 4) + ' tokens';
+  });
+
+  es.addEventListener('text', e => {
+    if (!thinkingDone) sealThinking();
+    const { chunk } = JSON.parse(e.data);
+    answerText += chunk;
+
+    const ab = document.getElementById('answerBlock');
+    ab.classList.remove('collapsed');
+    ab.classList.add('answer-active');
+
+    const body = document.getElementById('answerBody');
+    body.textContent = answerText;
+    body.appendChild(makeCursor());
+
+    document.getElementById('answerDot').className   = 'dot pulse-green';
+    document.getElementById('answerChevron').classList.add('open');
+  });
+
+  es.addEventListener('done', () => {
+    if (!thinkingDone) sealThinking();
+    // remove cursor from answer
+    const body = document.getElementById('answerBody');
+    if (body) body.textContent = answerText;
+    document.getElementById('answerDot').className = 'dot done-green';
+    document.getElementById('answerChevron').classList.remove('open');
+    document.getElementById('answerBlock').classList.add('collapsed');
+    document.getElementById('answerBlock').classList.remove('answer-active');
+    // re-expand answer without cursor so user can read
+    setTimeout(() => {
+      document.getElementById('answerBlock').classList.remove('collapsed');
+      document.getElementById('answerChevron').classList.add('open');
+    }, 300);
+    cleanup();
+  });
+
+  es.addEventListener('error', e => {
+    try {
+      const { message } = JSON.parse(e.data);
+      appendError(message);
+    } catch { /* ignore */ }
+    cleanup();
+  });
+
+  es.onerror = () => {
+    if (answerText || thinkingText) { cleanup(); return; }
+    appendError(`Cannot connect to ${base} — is your Spring Boot server running?`);
+    cleanup();
+  };
+}
+
+function sealThinking() {
+  thinkingDone = true;
+  const body = document.getElementById('thinkingBody');
+  if (body) body.textContent = thinkingText;
+  document.getElementById('thinkingDot').className = 'dot done-purple';
+  document.getElementById('thinkingChevron').classList.remove('open');
+  document.getElementById('thinkingBlock').classList.add('collapsed');
+  document.getElementById('thinkingBlock').classList.remove('thinking-active');
+}
+
+function cleanup() {
+  if (es) { es.close(); es = null; }
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = false; btn.textContent = 'Ask ↗';
+}
+
+function makeCursor() {
+  const c = document.createElement('span');
+  c.className = 'cursor'; return c;
+}
+
+function appendError(msg) {
+  document.getElementById('streamArea').insertAdjacentHTML('beforeend',
+    `<div class="error-block">⚠ ${msg}</div>`);
+}
+
+function toggleBlock(blockId, chevId) {
+  const blk = document.getElementById(blockId);
+  const collapsed = blk.classList.toggle('collapsed');
+  document.getElementById(chevId).classList.toggle('open', !collapsed);
+}
+
+document.getElementById('prompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startStream(); }
+});
+</script>
+</body>
+</html>
