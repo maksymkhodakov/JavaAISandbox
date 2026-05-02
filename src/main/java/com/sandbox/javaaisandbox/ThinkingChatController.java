@@ -1,5 +1,7 @@
 package com.sandbox.javaaisandbox;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -18,6 +20,8 @@ import java.util.Map;
 @RequestMapping("/api/chat")
 @CrossOrigin(origins = "*")  // lock down in production
 public class ThinkingChatController {
+
+    private static final Logger log = LoggerFactory.getLogger(ThinkingChatController.class);
 
     private final AnthropicChatModel chatModel;
     private final JsonMapper jsonMapper;
@@ -38,6 +42,13 @@ public class ThinkingChatController {
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> stream(@RequestParam String message,
                                                 @RequestParam(defaultValue = "8000") int budgetTokens) {
+        if (message.isBlank()) {
+            throw new IllegalArgumentException("message must not be blank");
+        }
+        if (budgetTokens < 1024) {
+            throw new IllegalArgumentException("budgetTokens must be >= 1024");
+        }
+
         AnthropicChatOptions options = AnthropicChatOptions.builder()
                 .model(chatModel.getOptions().getModel())
                 .thinkingAdaptive()
@@ -47,10 +58,15 @@ public class ThinkingChatController {
 
         Prompt prompt = new Prompt(List.of(new UserMessage(message)), options);
 
+        // onErrorResume is placed after concatWith so that stream errors suppress the done event
+        // and only emit a single terminal event (error), while normal completion emits done.
         return chatModel.stream(prompt)
                 .map(this::toSseEvent)
-                .onErrorResume(ex -> Flux.just(errorEvent(ex.getMessage())))
-                .concatWith(Flux.just(doneEvent()));
+                .concatWith(Flux.just(doneEvent()))
+                .onErrorResume(ex -> {
+                    log.error("SSE stream error", ex);
+                    return Flux.just(errorEvent(clientMessage(ex)));
+                });
     }
 
     // ── SSE event builders ──────────────────────────────────────────────────
@@ -84,7 +100,8 @@ public class ThinkingChatController {
                     .build();
 
         } catch (Exception e) {
-            return errorEvent(e.getMessage());
+            log.error("Error building SSE event from response", e);
+            return errorEvent("Event processing error");
         }
     }
 
@@ -95,7 +112,8 @@ public class ThinkingChatController {
                     .data(jsonMapper.writeValueAsString(payload))
                     .build();
         } catch (Exception e) {
-            return errorEvent(e.getMessage());
+            log.error("JSON serialization error for event type '{}'", eventType, e);
+            return errorEvent("Serialization error");
         }
     }
 
@@ -104,6 +122,13 @@ public class ThinkingChatController {
                 .event("done")
                 .data("{}")
                 .build();
+    }
+
+    private String clientMessage(Throwable ex) {
+        if (ex instanceof IllegalArgumentException) {
+            return ex.getMessage();
+        }
+        return "Stream error — see server logs for details";
     }
 
     private ServerSentEvent<String> errorEvent(String message) {
