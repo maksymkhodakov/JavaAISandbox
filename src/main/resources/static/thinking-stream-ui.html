@@ -27,6 +27,19 @@
     --sans: 'Inter', system-ui, sans-serif;
   }
 
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: rgba(255,255,255,.08);
+    --border2: rgba(255,255,255,.18);
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --purple-dim: rgba(124,58,237,.15);
+    --green-dim: rgba(5,150,105,.15);
+    --red-dim: rgba(220,38,38,.15);
+  }
+
   body {
     font-family: var(--sans);
     background: var(--bg);
@@ -252,9 +265,22 @@
   .block-body::-webkit-scrollbar { width: 4px; }
   .block-body::-webkit-scrollbar-track { background: transparent; }
   .block-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* theme toggle */
+  .theme-toggle {
+    position: fixed; top: 1rem; right: 1rem;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--surface); color: var(--text);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: background .2s, border-color .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  }
+  .theme-toggle:hover { background: var(--surface2); }
 </style>
 </head>
 <body>
+<button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme">🌙</button>
 <div class="container">
   <h1>Claude Thinking Stream</h1>
 
@@ -289,6 +315,21 @@
 </div>
 
 <script>
+(function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
+  });
+})();
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.getElementById('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙';
+}
+
 let es = null;
 let thinkingText = '';
 let answerText   = '';
