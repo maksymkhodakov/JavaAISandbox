@@ -1,43 +1,41 @@
-# CLAUDE.md
+### 1. Plan Mode Default
+- Enter plan mode for ANY not-trivial task (3+ steps or architectural decisions)
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+### 2. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until the mistake rate drops
+- Review lessons at session start for a project
 
-## Build & Run
+### 3. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
 
-```bash
-./mvnw compile          # compile only
-./mvnw spring-boot:run  # run locally (requires ANTHROPIC_API_KEY or application-local.yml)
-./mvnw test             # run tests
-./mvnw package          # build fat jar → target/JavaAISandbox-0.0.1-SNAPSHOT.jar
-```
+### 4. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes. Don't overengineer
+- Challenge your own work before presenting it
 
-The app runs on `http://localhost:8080` by default.
+## Core Principles
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards
 
-**API key**: set via env var `ANTHROPIC_API_KEY`, or override in `src/main/resources/application-local.yml` (gitignored — do not commit keys).
+## Project General Instructions
 
-## Architecture
-
-Single-feature Spring Boot 4.0.6 sandbox demonstrating Claude extended thinking over SSE.
-
-```
-ThinkingChatController  – GET /api/chat/stream  (SSE, reactive Flux)
-ChatUIController        – GET /chat             (serves the HTML UI)
-CorsConfig              – global CORS filter for /api/**
-static/thinking-stream-ui.html  – self-contained vanilla JS SSE client
-```
-
-**Streaming flow**: the `/api/chat/stream` endpoint builds an `AnthropicChatOptions` with `.thinkingEnabled(budgetTokens)`, wraps it in a `Prompt`, and calls `chatModel.stream(prompt)`. Each `ChatResponse` is mapped to a named SSE event:
-
-- `thinking` — chunk where `output.getMetadata().get("thinking") == Boolean.TRUE`; text is in `output.getText()`
-- `text` — regular answer chunk
-- `done` / `error` — terminal events
-
-## Key Spring AI 2.x notes
-
-This project uses **Spring AI 2.0.0-M4**, which replaced the old `spring-ai-anthropic` internal HTTP layer with the official Anthropic Java SDK (`com.anthropic`). Important API differences from 1.x:
-
-- `AnthropicApi` / `org.springframework.ai.anthropic.api` **does not exist** — do not import it.
-- Thinking is configured via `AnthropicChatOptions.Builder.thinkingEnabled(long budgetTokens)` (or `.thinking(ThinkingConfigParam)`).
-- There is no `.budgetTokens()` builder method — pass the budget directly to `.thinkingEnabled()`.
-- `JsonMapper` (from `tools.jackson.databind.json.JsonMapper`, the Anthropic SDK's bundled Jackson) is used instead of `com.fasterxml.jackson.databind.ObjectMapper` — Spring Boot 4 does not auto-register `ObjectMapper` as a bean in this setup.
-- `budgetTokens` must be ≥ 1024; `maxTokens` must exceed `budgetTokens`.
+- Always use the latest versions of dependencies.
+- Always write Java code as the Spring Boot application.
+- Always use Maven for dependency management.
+- Always create test cases for the generated code both positive and negative.
+- Always generate the CircleCI pipeline in the .circleci directory to verify the code.
+- Minimize the amount of code generated.
+- The Maven artifact name must be the same as the parent directory name.
+- Use semantic versioning for the Maven project. Each time you generate a new version, bump the PATCH section of the version number.
+- Use `pl.piomin.services` as the group ID for the Maven project and base Java package.
+- Do not use the Lombok library.
+- Generate the Docker Compose file to run all components used by the application.
+- Update README.md each time you generate a new version.
