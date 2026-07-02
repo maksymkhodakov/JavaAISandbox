@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fitness Agent</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface2: #f1f5f9;
+    --border: rgba(0,0,0,.08);
+    --border2: rgba(0,0,0,.15);
+    --text: #0f172a;
+    --muted: #64748b;
+    --green: #059669;
+    --green-dim: rgba(5,150,105,.08);
+    --amber: #d97706;
+    --amber-dim: rgba(217,119,6,.08);
+    --red: #dc2626;
+    --red-dim: rgba(220,38,38,.07);
+    --radius: 10px;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: rgba(255,255,255,.08);
+    --border2: rgba(255,255,255,.18);
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --green-dim: rgba(5,150,105,.15);
+    --amber-dim: rgba(217,119,6,.18);
+    --red-dim: rgba(220,38,38,.15);
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; }
+
+  h1 {
+    font-size: 15px; font-weight: 500; letter-spacing: .04em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;
+  }
+  h1::before {
+    content: ''; display: inline-block;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: .75rem;
+  }
+
+  .url-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: .75rem;
+    font-size: 12px; color: var(--muted);
+  }
+  .url-row label { white-space: nowrap; }
+  .url-row input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--text);
+    outline: none;
+  }
+  .url-row input:focus { border-color: var(--border2); }
+
+  .prompt-row { display: flex; gap: 10px; }
+
+  textarea {
+    flex: 1; min-height: 60px; max-height: 140px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+    font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    color: var(--text); resize: vertical; outline: none;
+    transition: border-color .15s;
+  }
+  textarea:focus { border-color: var(--border2); }
+
+  button.send {
+    background: var(--green-dim);
+    border: 1px solid rgba(5,150,105,.3);
+    color: var(--green); border-radius: 8px;
+    padding: 0 20px; height: 44px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    white-space: nowrap; transition: all .15s;
+    align-self: flex-start;
+  }
+  button.send:hover { background: rgba(5,150,105,.2); }
+  button.send:disabled { opacity: .4; cursor: not-allowed; }
+
+  .result-area { display: flex; flex-direction: column; gap: 10px; }
+
+  .empty {
+    text-align: center; padding: 4rem 1rem;
+    color: var(--muted); font-size: 13px;
+  }
+  .empty-icon {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: center;
+    margin: 0 auto 1rem; font-size: 18px; opacity: .4;
+  }
+
+  .spinner {
+    width: 20px; height: 20px; margin: 0 auto 1rem;
+    border: 2px solid var(--border); border-top-color: var(--green);
+    border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 14px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .card-header .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot-green { background: var(--green); }
+  .dot-amber { background: var(--amber); }
+
+  .card-label {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase;
+  }
+  .label-green { color: var(--green); }
+  .label-amber { color: var(--amber); }
+
+  .card-body { padding: 14px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .chip b { color: var(--muted); font-weight: 500; margin-right: 4px; }
+
+  .day {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; background: var(--bg);
+  }
+  .day:last-child { margin-bottom: 0; }
+  .day-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .day-focus { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .day ul { padding-left: 1.2em; }
+  .day li { font-size: 13px; line-height: 1.7; }
+
+  .macro-row {
+    display: flex; gap: 16px; margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .macro-row .stat b { display: block; font-size: 18px; color: var(--amber); }
+  .macro-row .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+
+  .meal-list { padding-left: 1.2em; }
+  .meal-list li { font-size: 13px; line-height: 1.8; }
+
+  .error-block {
+    background: var(--red-dim); border: 1px solid rgba(248,113,113,.25);
+    border-radius: var(--radius); padding: 12px 16px;
+    font-size: 13px; color: var(--red);
+  }
+
+  .theme-toggle {
+    position: fixed; top: 1rem; right: 1rem;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--surface); color: var(--text);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: background .2s, border-color .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  }
+  .theme-toggle:hover { background: var(--surface2); }
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle light/dark theme">🌙</button>
+<div class="container">
+  <h1>Fitness Agent</h1>
+
+  <div class="input-card">
+    <div class="url-row">
+      <label>Spring Boot URL</label>
+      <input id="baseUrl" value="http://localhost:8080/api/fitness/plan"/>
+    </div>
+    <div class="prompt-row">
+      <textarea id="prompt" rows="2"
+        placeholder="Describe your goal, experience level, days per week, equipment…"
+      >Beginner, 3 days per week, home workouts with dumbbells only, wants to lose fat.</textarea>
+      <button class="send" id="sendBtn" onclick="requestPlan()">Generate ↗</button>
+    </div>
+  </div>
+
+  <div class="result-area" id="resultArea">
+    <div class="empty">
+      <div class="empty-icon">🏋</div>
+      Describe your goal to generate a personalized workout + nutrition plan
+    </div>
+  </div>
+</div>
+
+<script>
+(function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
+  });
+})();
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.getElementById('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙';
+}
+
+async function requestPlan() {
+  const description = document.getElementById('prompt').value.trim();
+  if (!description) return;
+  const base = document.getElementById('baseUrl').value.trim();
+  const btn  = document.getElementById('sendBtn');
+  const area = document.getElementById('resultArea');
+
+  btn.disabled = true; btn.textContent = 'Generating…';
+  area.innerHTML = `<div class="empty"><div class="spinner"></div>Planning your workout + nutrition… this can take up to a minute</div>`;
+
+  try {
+    const res = await fetch(base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description })
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      renderError(body.error || `Request failed with HTTP ${res.status}`);
+      return;
+    }
+    renderPlan(body);
+  } catch (e) {
+    renderError(`Cannot reach ${base} — is your Spring Boot server running?`);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate ↗';
+  }
+}
+
+function renderPlan(plan) {
+  const p = plan.profile || {};
+  const w = plan.workoutPlan || { days: [] };
+  const n = plan.nutritionPlan || { mealSuggestions: [] };
+
+  const chips = `
+    <div class="chips">
+      <span class="chip"><b>Goal</b>${escapeHtml(p.goal ?? '—')}</span>
+      <span class="chip"><b>Level</b>${escapeHtml(p.experienceLevel ?? '—')}</span>
+      <span class="chip"><b>Days/wk</b>${escapeHtml(String(p.daysPerWeek ?? '—'))}</span>
+      <span class="chip"><b>Equipment</b>${escapeHtml(p.availableEquipment ?? '—')}</span>
+    </div>`;
+
+  const days = (w.days || []).map(d => `
+    <div class="day">
+      <div class="day-title">${escapeHtml(d.day ?? '')}</div>
+      <div class="day-focus">${escapeHtml(d.focus ?? '')}</div>
+      <ul>${(d.exercises || []).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+    </div>`).join('') || `<div class="day-focus">No workout days returned.</div>`;
+
+  const meals = (n.mealSuggestions || []).map(m => `<li>${escapeHtml(m)}</li>`).join('')
+    || `<li>No meal suggestions returned.</li>`;
+
+  document.getElementById('resultArea').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="dot dot-green"></div>
+        <span class="card-label label-green">Profile</span>
+      </div>
+      <div class="card-body">${chips}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="dot dot-green"></div>
+        <span class="card-label label-green">Workout Plan</span>
+      </div>
+      <div class="card-body">${days}</div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="dot dot-amber"></div>
+        <span class="card-label label-amber">Nutrition Plan</span>
+      </div>
+      <div class="card-body">
+        <div class="macro-row">
+          <div class="stat"><b>${escapeHtml(String(n.dailyCalories ?? '—'))}</b><span>kcal / day</span></div>
+          <div class="stat"><b style="font-size:13px">${escapeHtml(n.macroBreakdown ?? '—')}</b><span>macros</span></div>
+        </div>
+        <ul class="meal-list">${meals}</ul>
+      </div>
+    </div>`;
+}
+
+function renderError(msg) {
+  document.getElementById('resultArea').innerHTML = `<div class="error-block">⚠ ${escapeHtml(msg)}</div>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+document.getElementById('prompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); requestPlan(); }
+});
+</script>
+</body>
+</html>

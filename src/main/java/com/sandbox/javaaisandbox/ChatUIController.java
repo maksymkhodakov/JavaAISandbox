@@ -16,4 +16,11 @@ public class ChatUIController {
                 .contentType(MediaType.TEXT_HTML)
                 .body(new ClassPathResource("static/thinking-stream-ui.html"));
     }
+
+    @GetMapping("/fitness")
+    public ResponseEntity<Resource> fitness() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .body(new ClassPathResource("static/fitness-ui.html"));
+    }
 }

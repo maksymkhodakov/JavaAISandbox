@@ -1,0 +1,12 @@
+spring:
+  ai:
+    anthropic:
+      api-key: test-key-not-real
+embabel:
+  models:
+    default-llm: claude-sonnet-4-5
+  agent:
+    platform:
+      models:
+        anthropic:
+          api-key: test-key-not-real

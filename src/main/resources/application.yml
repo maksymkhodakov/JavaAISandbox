@@ -10,6 +10,15 @@ spring:
           model: claude-sonnet-4-5-20250929
           max-tokens: 16000
 
+embabel:
+  agent:
+    platform:
+      models:
+        anthropic:
+          api-key: ${ANTHROPIC_API_KEY}        # set via env var
+  models:
+    default-llm: claude-sonnet-4-5
+
 server:
   port: 8080
 

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -11,7 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
-import tools.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -24,10 +25,10 @@ public class ThinkingChatController {
     private static final Logger log = LoggerFactory.getLogger(ThinkingChatController.class);
 
     private final AnthropicChatModel chatModel;
-    private final JsonMapper jsonMapper;
+    private final ObjectMapper jsonMapper;
 
     public ThinkingChatController(AnthropicChatModel chatModel,
-                                  JsonMapper jsonMapper) {
+                                  ObjectMapper jsonMapper) {
         this.chatModel = chatModel;
         this.jsonMapper = jsonMapper;
     }
@@ -50,10 +51,10 @@ public class ThinkingChatController {
         }
 
         AnthropicChatOptions options = AnthropicChatOptions.builder()
-                .model(chatModel.getOptions().getModel())
-                .thinkingAdaptive()
-                .thinkingEnabled(budgetTokens)
-                .maxTokens(chatModel.getOptions().getMaxTokens())
+                .model(chatModel.getDefaultOptions().getModel())
+                .thinking(AnthropicApi.ThinkingType.ENABLED, budgetTokens)
+                .maxTokens(chatModel.getDefaultOptions().getMaxTokens())
+                .temperature(1.0) // Anthropic requires temperature == 1 when thinking is enabled
                 .build();
 
         Prompt prompt = new Prompt(List.of(new UserMessage(message)), options);
@@ -81,10 +82,11 @@ public class ThinkingChatController {
             var metadata = output.getMetadata();
 
             /*
-                In Spring AI 2.x the thinking delta arrives with metadata "thinking"=Boolean.TRUE
-                the actual thinking text is in output.getText().
+                In Spring AI 1.1.7 a thinking delta is an AssistantMessage whose properties
+                carry a "signature" key (see AnthropicChatModel.toChatResponse); regular text
+                deltas never have that key. The actual thinking text is in output.getText().
              */
-            boolean isThinking = Boolean.TRUE.equals(metadata.get("thinking"));
+            boolean isThinking = metadata.containsKey("signature");
             String textChunk = output.getText();
 
             if (isThinking && textChunk != null && !textChunk.isBlank()) {
